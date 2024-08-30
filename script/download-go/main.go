@@ -31,7 +31,7 @@ func main() {
 		strKey = append(strKey, numKey)
 	}
 	sort.Ints(strKey)
-	err := get.Download(*client, data.HistoryVersion[strconv.Itoa(strKey[len(strKey)-1])], "server.app")
+	err := get.Download(*client, data.HistoryVersion[strconv.Itoa(strKey[len(strKey)-1])], "server.jar")
 	if err != nil {
 		log.Fatalf("fail: %v", err)
 	}
