@@ -4,13 +4,16 @@ import (
 	"github.com/Mr-Ao-Dragon/MCSL-Sync-Golang-SDK/get"
 	"github.com/Mr-Ao-Dragon/MCSL-Sync-Golang-SDK/info"
 	"github.com/Mr-Ao-Dragon/MCSL-Sync-Golang-SDK/setup"
-	"log"
+	"github.com/rs/zerolog"
+
+	"github.com/rs/zerolog/log"
 	"os"
 	"sort"
 	"strconv"
 )
 
 func main() {
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	client := setup.InitSetupData(
 		"sync.mcsl.com.cn",
 		true,
@@ -18,7 +21,7 @@ func main() {
 		"mohist",
 		os.Getenv("MCVersion"),
 		"",
-		"/app",
+		"/jbin",
 	)
 	data := new(info.CoreInfo)
 	data.GetCoreBuildListSingleMCVersion(*client)
@@ -26,14 +29,16 @@ func main() {
 	for k := range data.HistoryVersion {
 		numKey, err := strconv.Atoi(k)
 		if err != nil {
-			log.Panicf("无法对列表进行转换")
+			log.Panic().AnErr("key", err).Msg("无法对列表进行转换")
 		}
 		strKey = append(strKey, numKey)
 	}
 	sort.Ints(strKey)
+	os.Chdir("/")
+	os.Mkdir("jbin", 0644)
+	os.Chdir("/jbin")
 	err := get.Download(*client, data.HistoryVersion[strconv.Itoa(strKey[len(strKey)-1])], "server.jar")
 	if err != nil {
-		log.Fatalf("fail: %v", err)
+		log.Fatal().AnErr("fail to downlod", err)
 	}
-
 }

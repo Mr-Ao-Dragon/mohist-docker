@@ -1,19 +1,23 @@
 package main
 
 import (
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/shirou/gopsutil/v4/mem"
 	"io"
-	"log"
 	"math"
 	"os"
 	"os/exec"
 	"os/signal"
 	"strconv"
+	"sync"
 	"syscall"
 
 	"github.com/creack/pty"
 	"golang.org/x/term"
 )
+
+var wg sync.WaitGroup
 
 func ptyShell(command string) error {
 	// Create arbitrary command.
@@ -32,8 +36,8 @@ func ptyShell(command string) error {
 	signal.Notify(ch, syscall.Signal(30))
 	go func() {
 		for range ch {
-			if err := pty.InheritSize(os.Stdin, ptmx); err != nil {
-				log.Printf("error resizing pty: %s", err)
+			if err = pty.InheritSize(os.Stdin, ptmx); err != nil {
+				log.Error().Msgf("failed to resize pty: %v", err)
 			}
 		}
 	}()
@@ -55,36 +59,86 @@ func ptyShell(command string) error {
 	return nil
 }
 func main() {
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	memSettingFile := "/app/memorysize.txt"
 	jvmArgsFile := "/app/userjvmargs.txt"
 	_, memSettingStat := os.Stat(memSettingFile)
 	_, jvmArgsStat := os.Stat(jvmArgsFile)
 	var memSetting string
 	var jvmArgs string
+	vmi, _ := mem.VirtualMemory()
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	if os.IsNotExist(memSettingStat) || os.IsNotExist(jvmArgsStat) {
-		log.Println("Memory size or JVM args file not found, using default values.")
-		vmi, _ := mem.VirtualMemory()
+		log.Warn().Msgf("Memory size or JVM args file not found, using default values.")
 		memSetting = "-Xmx" + strconv.FormatUint(vmi.Available/uint64(math.Trunc(math.Pow(1024, 3))), 10) + "G" + "-Xms" + strconv.FormatUint(vmi.Available/uint64(math.Trunc(math.Pow(1024, 5))), 10)
+		log.Warn().Msgf("Mem args: %s", memSetting)
 		jvmArgs = "-XX:UseZGC -XX:ZGCenerational"
+		log.Warn().Msgf("JVM args: %s", jvmArgs)
 	}
 	memSettingByte, err := os.ReadFile(memSettingFile)
 	if err != nil {
-		log.Println("Memory size file read error, using default values.")
-		vmi, _ := mem.VirtualMemory()
+		log.Warn().Msgf("Memory size file read error, using default values.")
+		vmi, _ = mem.VirtualMemory()
 		memSetting = "-Xmx" + strconv.FormatUint(vmi.Available/uint64(math.Trunc(math.Pow(1024, 3))), 10) + "G" + "-Xms" + strconv.FormatUint(vmi.Available/uint64(math.Trunc(math.Pow(1024, 5))), 10)
+		log.Warn().Msgf("Mem args: %s", memSetting)
 		jvmArgs = "-XX:UseZGC -XX:ZGCener"
+		log.Warn().Msgf("JVM args: %s", jvmArgs)
 	}
 	jvmArgsByte, err := os.ReadFile(jvmArgsFile)
 	if err != nil {
-		log.Println("Memory size file read error, using default values.")
-		vmi, _ := mem.VirtualMemory()
+		log.Warn().Msgf("Memory size file read error, using default values.")
+		vmi, _ = mem.VirtualMemory()
 		memSetting = "-Xmx" + strconv.FormatUint(vmi.Available/uint64(math.Trunc(math.Pow(1024, 3))), 10) + "G" + "-Xms" + strconv.FormatUint(vmi.Available/uint64(math.Trunc(math.Pow(1024, 5))), 10)
-		jvmArgs = "-XX:UseZGC -XX:ZGCener"
+		log.Warn().Msgf("Mem args: %s", memSetting)
+		jvmArgs = "-XX:UseZGC" + " " + "-XX:ZGCener"
+		log.Warn().Msgf("JVM args: %s", jvmArgs)
 	}
 	memSetting = string(memSettingByte)
 	jvmArgs = string(jvmArgsByte)
-	err = ptyShell("java " + memSetting + " " + jvmArgs + " -jar /app/server.jar")
-	if err != nil {
-		log.Fatalf("Error: %v", err)
+	app, _ := os.ReadDir("/app")
+	appStat, _ := os.Stat("/app")
+	if !appStat.IsDir() {
+		log.Fatal().Msgf("this image need dir to store server data, not is a file")
 	}
+	//if reflect.ValueOf(appStat.Sys()).Elem().FieldByName("perm").Field(0).Int() < 0400 {
+	//
+	//}
+	for _, path := range app {
+		err = os.Link("/app"+path.Name(), "/jbin"+path.Name())
+		if err != nil {
+			log.Error().AnErr("Fill to link file", err).Msgf("file name: %s", path.Name())
+		}
+	}
+	log.Info().Msgf("server launching...")
+	log.Info().Msgf("this server have %d bytes memory can use", int(vmi.Available))
+	launchCmd := "java" + " " + "-jar" + " " + "/jbin/server.jar" + " " + memSetting + " " + jvmArgs
+	log.Printf("launch command: %s", launchCmd)
+	_ = os.Chdir("/jbin")
+	err = ptyShell(launchCmd)
+	if err != nil {
+		log.Fatal().AnErr("Fill to launch server", err).Msg("")
+	}
+	if len(app) > 2 {
+		os.Exit(0)
+	}
+	log.Info().Msgf("this server is first launch, no jar file found in /app, will move files to /app")
+	source, _ := os.ReadDir("/jbin")
+	//ctx := context.Background()
+	for _, path := range source {
+		switch path.Name() {
+		case "server.jar":
+			continue
+		default:
+			wg.Add(1)
+			go func() {
+				err = os.Rename("/jbin"+path.Name(), "/app"+path.Name())
+				if err != nil {
+					log.Error().AnErr("Fill to move file", err).Msgf("file name: %s", path.Name())
+				}
+			}()
+			wg.Done()
+		}
+	}
+	wg.Wait()
+	return
 }
