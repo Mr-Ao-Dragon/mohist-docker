@@ -1,9 +1,11 @@
 package main
 
 import (
+	"github.com/creack/pty"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/shirou/gopsutil/v4/mem"
+	"golang.org/x/term"
 	"io"
 	"math"
 	"os"
@@ -12,9 +14,6 @@ import (
 	"strconv"
 	"sync"
 	"syscall"
-
-	"github.com/creack/pty"
-	"golang.org/x/term"
 )
 
 var wg sync.WaitGroup

@@ -5,3 +5,4 @@ libraries/
 *.kate-*
 
 /vendor/
+/target/

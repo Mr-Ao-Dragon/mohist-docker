@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="RemoteTargetsManager">
+    <targets>
+      <target name="golang:1.23-alpine" type="docker" uuid="a204a52d-13e7-42fa-83e4-f64b1c2ce02e">
+        <config>
+          <option name="targetPlatform">
+            <TargetPlatform />
+          </option>
+          <option name="buildImageConfig">
+            <BuildImageConfig>
+              <option name="dockerFile" value="devEnv.Dockerfile" />
+            </BuildImageConfig>
+          </option>
+          <option name="containerConfig">
+            <ContainerConfig>
+              <option name="runCliOptions" value="--entrypoint=/bin/sh --rm -it -v .:/app/src" />
+            </ContainerConfig>
+          </option>
+          <option name="projectRootOnTarget" value="/app/src" />
+          <option name="pullImageConfig">
+            <PullImageConfig>
+              <option name="tagToPull" value="golang:1.23-alpine" />
+            </PullImageConfig>
+          </option>
+        </config>
+        <ContributedStateBase type="GoLanguageRuntime">
+          <config>
+            <option name="compiledExecutablesVolume">
+              <VolumeState>
+                <option name="remotePath" value="/app/dist" />
+                <option name="targetSpecificBits">
+                  <map>
+                    <entry key="mountAsVolume" value="true" />
+                  </map>
+                </option>
+              </VolumeState>
+            </option>
+            <option name="goPath" value="/go" />
+            <option name="goRoot" value="/usr/local/go/bin/go" />
+            <option name="goVersion" value="go1.23.0 linux/amd64" />
+            <option name="musl" value="true" />
+            <option name="projectSourcesVolume">
+              <VolumeState>
+                <option name="remotePath" value="/app/src" />
+                <option name="targetSpecificBits">
+                  <map>
+                    <entry key="mountAsVolume" value="false" />
+                  </map>
+                </option>
+              </VolumeState>
+            </option>
+          </config>
+        </ContributedStateBase>
+      </target>
+    </targets>
+  </component>
+</project>
